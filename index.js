@@ -1,55 +1,160 @@
-require('dotenv').config();
-const express = require ("express");
-const cors = require ('cors')
-const app = express()
-const port = process.env.PORT || 3000;
-const { MongoClient, ServerApiVersion } = require('mongodb');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const app = express();
+const port = process.env.PORT || 3001;
+const { MongoClient, ServerApiVersion } = require("mongodb");
+const { default: mongoose } = require("mongoose");
+const bodyParser = require("body-parser");
 
 // middleware
 app.use(cors());
 app.use(express());
+app.use(bodyParser.json());
+const router = express.Router();
 
+// --------------------
 
-// ------------------
-// yourVisaNavigatoion
-// yourVisaNavigatoion
+// Models
+const Visa = require("./models/visa.js");
 
-console.log("USER ::", process.env.DB_USER)
-console.log("PASS ::", process.env.DB_PASS)
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.gf77n.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-console.log(uri)
+// --------------------
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.gf77n.mongodb.net/yourVisaNavigator`;
+
+console.log(uri);
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
+const connectDB = async () => {
+  try {
+    mongoose.connect(uri);
+    console.log("Connected to mongoDB");
+  } catch (error) {
+    console.log("Error", error);
+  }
+};
+connectDB();
+// ---------------------
+
+app.get("/visas", async (req, res) => {
+  try {
+    const visas = await mongoose.connection.db
+      .collection("visas")
+      .find()
+      .limit(25)
+      .toArray();
+    // console.log(embedded_movies)
+    res.status(200).json({ visas });
+  } catch (error) {
+    console.log("ERROR", error);
+    res.status(500).json({ error: "internal server error" });
   }
 });
 
-async function run() {
+app.post("/", async (req, res) => {
+  console.log(req);
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    await client.close();
-  }
-}
-run().catch(console.dir);
+    const {
+      userId,
+      countryName,
+      visaType,
+      processingTime,
+      requiredDocuments,
+      description,
+      ageRestriction,
+      fee,
+      validity,
+      applicationMethod,
+      countryImage,
+    } = req.body;
 
-// ---------------------
-app.get('/', (req, res) => {
-    res.send('User Management server is running')
+    const newVisa = new Visa({
+      userId,
+      countryName,
+      visaType,
+      processingTime,
+      requiredDocuments,
+      description,
+      ageRestriction,
+      fee,
+      validity,
+      applicationMethod,
+      countryImage,
+    });
+
+    await newVisa.save();
+    res.status(200).json({
+      success: true,
+      data: newVisa,
+    });
+  } catch (error) {
+    console.log("Error", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/users/:userId", async (req,res) => {
+    const {userId} = req.params
+    try{
+        const visas = await Visa.find({userId, visaStatus:"pending"})
+        console.log(visas)
+        if(visas.length<1){
+            return res.status(404).json({
+                message: "No Pending Application Found For This User"
+            })
+        }
+        res.status(200).json(visas)
+    }
+    catch(error){
+        console.log("Error", error)
+        res.status(500).json({
+            success: false,
+            message: error.message,
+          });}
 })
 
-app.get('/users', (req, res) => {
-    res.send(users)
+app.get("/accepted/:userId", async (req,res) => {
+    const {userId} = req.params
+    try{
+        const visas = await Visa.find({userId, visaStatus:"accepted"})
+        console.log(visas)
+        if(visas.length<1){
+            return res.status(404).json({
+                message: "No Pending Application Found For This User"
+            })
+        }
+        res.status(200).json(visas)
+    }
+    catch(error){
+        console.log("Error", error)
+        res.status(500).json({
+            success: false,
+            message: error.message,
+          });}
+})
+
+app.get("/country/:countryName", async (req,res) => {
+    const {countryName} = req.params
+
+    try{
+        const visas = await Visa.find({countryName:countryName})
+        // console.log(visas)
+        if(visas.length<1){
+            return res.status(404).json({
+                message: "No Pending Application Found For This User"
+            })
+        }
+        res.status(200).json(visas)
+    }
+    catch(error){
+        console.log("Error", error)
+        res.status(500).json({
+            success: false,
+            message: error.message,
+          });}
 })
 
 app.listen(port, () => {
-    console.log(` Server is running port: ${port} `)
-})
+  console.log(` Server is running port: ${port} `);
+});
